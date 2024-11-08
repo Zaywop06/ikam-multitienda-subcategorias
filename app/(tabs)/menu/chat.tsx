@@ -18,6 +18,7 @@ interface Chat {
   id: string;
   idPyme: string;
   idUser: string;
+  unreadCount: number;
   ultimoMensaje?: string;
   hora?: string;
   user?: string;
@@ -32,6 +33,7 @@ interface Chats {
   ultimoMensaje?: string;
   hora?: string;
   user?: string;
+  unreadCount: number;
 }
 
 const Chat = () => {
@@ -126,6 +128,7 @@ const Chat = () => {
           nombre: pyme?.nombre_pyme || "PYME no encontrada",
           ultimoMensaje: chatItem.ultimoMensaje,
           hora: chatItem.hora || new Date().toISOString(),
+          unreadCount: chatItem.unreadCount || 0, // Asegúrate de incluir esto
         };
       })
       .sort((a, b) => new Date(a.hora).getTime() - new Date(b.hora).getTime());
@@ -178,6 +181,7 @@ const Chat = () => {
           : "PYME no encontrada",
         ultimoMensaje: chatItem.ultimoMensaje,
         hora: chatItem.hora || new Date().toISOString(),
+        unreadCount: chatItem.unreadCount || 0, // Asegúrate de incluir esto
       };
     });
     setChatsPyme(chatsConInfo);

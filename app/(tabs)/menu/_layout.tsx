@@ -3,7 +3,10 @@ import { Tabs } from "expo-router";
 import { View, Text, StyleSheet } from "react-native";
 import { TabBarIcon } from "@/components/navigation/TabBarIcon";
 import colorsIkam from "@/assets/estilos";
-import { obtenerTodosLosChats } from "@/services/services"; // Nueva función de servicio
+import {
+  obtenerChatsEnTiempoReal,
+  verificarSiEsPyme,
+} from "@/services/services"; // Nueva función de servicio
 import { auth } from "@/firebase/config-ikam";
 
 // Extraemos el tipo para el nombre de los íconos válidos
@@ -41,26 +44,59 @@ export default function TabLayout() {
   // Función para obtener y sumar los mensajes no leídos de todos los chats
   useEffect(() => {
     const obtenerMensajesNoLeidos = async () => {
-      try {
-        const user = auth.currentUser; // Obtener usuario autenticado
-        if (user) {
-          const userId = user.uid; // Obtener ID del usuario
-
-          const chats = await obtenerTodosLosChats(userId);
-          //console.log(chats)
-          const totalMensajesNoLeidos = chats.reduce((total, chat) => {
-            return total + (chat.unreadCount || 0);
-          }, 0);
-
+      const user = auth.currentUser;
+      if (!user) {
+        console.error("No hay usuario autenticado");
+        return;
+      }
+  
+      let userId = user.uid;
+      const isPyme = await verificarSiEsPyme(userId);
+      const tipo = isPyme ? "idPyme" : "idUser"; // Determinamos el tipo de usuario
+  
+      // Si es una pyme, usamos el idPyme, de lo contrario usamos el idUser
+      const currentUserId = isPyme ? isPyme : userId; // Si es pyme o cliente, usar el idUser adecuado
+  
+      // Usamos obtenerTodosLosChats con el callback correcto
+      const unsubscribe = obtenerChatsEnTiempoReal(
+        currentUserId,
+        tipo,
+        (chats) => {
+          let totalMensajesNoLeidos = 0;
+  
+          // Calculamos los mensajes no leídos dependiendo del tipo de usuario
+          chats.forEach((chat) => {
+            if (isPyme) {
+              // Si es una pyme, contamos los mensajes no leídos de los clientes
+              if (chat.idUser !== userId) {
+                totalMensajesNoLeidos += chat.unreadCount || 0;
+              }
+            } else {
+              // Si es un cliente, contamos los mensajes no leídos de las pymes
+              if (chat.idPyme === userId) {
+                totalMensajesNoLeidos += chat.unreadCount || 0;
+              }
+            }
+          });
+  
+          // Establecemos el número total de mensajes no leídos
           setUnreadMessages(totalMensajesNoLeidos);
         }
-      } catch (error) {
-        console.error("Error al obtener los mensajes no leídos:", error);
+      );
+  
+      return unsubscribe; // Asegúrate de que se devuelve la función de limpieza
+    };
+  
+    // Ejecutamos la función
+    const unsubscribe = obtenerMensajesNoLeidos();
+  
+    // Limpiar la suscripción al desmontar el componente
+    return () => {
+      if (unsubscribe && typeof unsubscribe === "function") {
+        unsubscribe(); // Cancelamos la suscripción si es una función
       }
     };
-
-    obtenerMensajesNoLeidos();
-  }, []); // Aquí puedes agregar dependencias, como el ID del usuario
+  }, []); // Aquí puedes agregar dependencias, como el ID del usuario  
 
   return (
     <Tabs

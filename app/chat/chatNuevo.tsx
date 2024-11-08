@@ -16,6 +16,7 @@ import {
   enviarMensaje,
   suscribirseAlChat,
   verificarYCrearChat,
+  actualizarUnreadCount,
 } from "@/services/services";
 
 type Mensaje = {
@@ -68,6 +69,7 @@ const chatNuevo = () => {
     if (mensaje.trim() === "") return;
     const chatId = userData?.uid + "-" + item.id;
     if (userData?.uid) {
+      actualizarUnreadCount(chatId, 1); // Cambiar de 0 a 1 para incrementar
       enviarMensaje(chatId, mensaje, userData.uid);
     }
     setMensaje("");

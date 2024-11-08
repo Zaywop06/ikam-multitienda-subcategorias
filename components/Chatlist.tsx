@@ -9,10 +9,15 @@ import {
 } from "react-native";
 import { Link, router } from "expo-router";
 import colorsIkam from "@/assets/estilos";
+import { actualizarUnreadCount } from "@/services/services";
 
 const Chatlist = ({ users, user }) => {
   const openChat = (item: any) => {
     router.push({ pathname: "/chat/chat", params: item });
+
+    if (item.user !== user) {
+      actualizarUnreadCount(item.id, 0); // Solo reseteará el contador si el receptor abre el chat
+    }
   };
 
   const ChatItem = (item: any) => {
@@ -37,8 +42,10 @@ const Chatlist = ({ users, user }) => {
               <Text style={estilos.nameText}>{item.nombre}</Text>
             </View>
             {item.user == user ? (
-              <View>                
-                <Text style={estilos.messageText}>Tu: {item.ultimoMensaje}</Text>
+              <View>
+                <Text style={estilos.messageText}>
+                  Tu: {item.ultimoMensaje}
+                </Text>
               </View>
             ) : (
               <Text style={estilos.messageTextOtros}>{item.ultimoMensaje}</Text>
@@ -58,6 +65,11 @@ const Chatlist = ({ users, user }) => {
                 : ""}
             </Text>
           </View>
+          {item.user !== user && item.unreadCount > 0 && (
+            <View style={estilos.badge}>
+              <Text style={estilos.badgeText}>{item.unreadCount}</Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
     );
@@ -134,6 +146,22 @@ const estilos = StyleSheet.create({
   },
   messageTextOtros: {
     color: colorsIkam.azulTex.color,
+  },
+  badge: {
+    position: "absolute",
+    right: -6,
+    top: -3,
+    backgroundColor: "red",
+    borderRadius: 10,
+    width: 20,
+    height: 20,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  badgeText: {
+    color: "white",
+    fontSize: 12,
+    fontWeight: "bold",
   },
 });
 

@@ -10,6 +10,8 @@ import {
   setDoc,
   Timestamp,
   where,
+  updateDoc,
+  increment,
 } from "firebase/firestore";
 import { ikam } from "@/firebase/config-ikam";
 import { Pyme } from "@/models/Pyme";
@@ -66,7 +68,9 @@ export const suscribirseACategorias = (
   }
 };
 
-export const suscribirseASubCategorias = (callback: (subcategorias: SubCategoria[]) => void) => {
+export const suscribirseASubCategorias = (
+  callback: (subcategorias: SubCategoria[]) => void
+) => {
   try {
     const unsubscribe = onSnapshot(
       collection(ikam, "subCategoria"),
@@ -364,41 +368,149 @@ export const suscribirseAUser = (callback: (user: User[]) => void) => {
 };
 
 // Ejemplo de función que recupera todos los chats
-export const obtenerTodosLosChats = async (userId: string): Promise<Chat[]> => {
+export const obtenerChatsEnTiempoReal = (
+  userId: string,
+  tipo: "idUser" | "idPyme",
+  callback: (chats: Chat[]) => void
+) => {
   try {
+    // Crear la consulta dinámica
     const chatsQuery = query(
       collection(ikam, "chat"),
-      where("idUser", "==", userId)
+      where(tipo, "==", userId)
     );
-    //console.log(getDocs(chatsQuery));
-    const querySnapshot = await getDocs(chatsQuery);
 
-    const chats: Chat[] = querySnapshot.docs.map((doc) => ({
-      id: doc.id,
-      unreadCount: doc.data().unreadCount || 0, // Asegúrate de mapear el unreadCount
-      // Agrega otras propiedades del chat que necesites
-    }));
+    // Escuchar los cambios en tiempo real
+    const unsubscribe = onSnapshot(chatsQuery, (querySnapshot) => {
+      const chats: Chat[] = querySnapshot.docs.map((doc) => ({
+        id: doc.id,
+        unreadCount: doc.data().unreadCount || 0,
+        idUser: doc.data().idUser,
+        idPyme: doc.data().idPyme,
+      }));
 
-    //console.log("chats" + chats);
-    return chats; // Devuelve un array de chats con el tipo correcto
+      // Llamar al callback con los chats recuperados
+      if (typeof callback === "function") {
+        callback(chats);
+      }
+    });
+
+    return unsubscribe; // Retornar la función de unsubscribe
   } catch (error) {
     console.error("Error al obtener los chats:", error);
-    return []; // Devuelve un array vacío en caso de error
+    return () => {}; // Retorna una función vacía en caso de error
   }
 };
 
+// export const obtenerTodosLosChats = async (userId: string): Promise<Chat[]> => {
+//   try {
+//     const chatsQuery = query(
+//       collection(ikam, "chat"),
+//       where("idUser", "==", userId)
+//     );
+//     //console.log(getDocs(chatsQuery));
+//     const querySnapshot = await getDocs(chatsQuery);
+
+//     const chats: Chat[] = querySnapshot.docs.map((doc) => ({
+//       id: doc.id,
+//       unreadCount: doc.data().unreadCount || 0, // Asegúrate de mapear el unreadCount
+//       // Agrega otras propiedades del chat que necesites
+//     }));
+
+//     //console.log("chats" + chats);
+//     return chats; // Devuelve un array de chats con el tipo correcto
+//   } catch (error) {
+//     console.error("Error al obtener los chats:", error);
+//     return []; // Devuelve un array vacío en caso de error
+//   }
+// };
+
 // Servicio para obtener el token del usuario receptor
 export const getReceptorToken = async (uid: string) => {
-  //console.log(uid)
-  const userQuery = query(collection(ikam, "users"), where("pyme", "==", uid));
-  const querySnapshot = await getDocs(userQuery);
+  try {
+    // Consulta a la colección completa una vez
+    const querySnapshot = await getDocs(collection(ikam, "users"));
 
-  if (!querySnapshot.empty) {
-    const userData = querySnapshot.docs[0].data();
-    //console.log(userData)
+    // Busca coincidencia con `pyme` o con el ID del documento
+    const matchingDoc = querySnapshot.docs.find(
+      (doc) => doc.data().pyme === uid || doc.id === uid
+    );
 
-    return userData.tokens;
-  } else {
+    // Si se encuentra coincidencia, devuelve el token
+    if (matchingDoc) {
+      const userData = matchingDoc.data();
+      return userData.tokens;
+    }
+
+    // Si no hay coincidencia, lanza un error
     throw new Error("Usuario no encontrado");
+  } catch (error) {
+    console.error("Error al obtener el token del receptor:", error);
+    return null; // Retorna `null` si ocurre un error
+  }
+};
+
+// export const getReceptorToken = async (uid: string) => {
+//   //console.log(uid)
+//   const userQuery = query(collection(ikam, "users"), where("pyme", "==", uid));
+//   const querySnapshot = await getDocs(userQuery);
+
+//   if (!querySnapshot.empty) {
+//     const userData = querySnapshot.docs[0].data();
+//     //console.log(userData)
+
+//     return userData.tokens;
+//   } else {
+//     throw new Error("Usuario no encontrado");
+//   }
+// };
+
+export const actualizarUnreadCount = async (
+  chatId: string,
+  newCount: number
+) => {
+  try {
+    const chatRef = doc(ikam, "chat", chatId);
+    if (newCount === 0) {
+      // Si newCount es 0, reseteamos el contador
+      await updateDoc(chatRef, {
+        unreadCount: 0,
+      });
+    } else {
+      // Incrementamos en 1 si no se especifica un nuevo conteo
+      await updateDoc(chatRef, {
+        unreadCount: increment(1),
+      });
+    }
+  } catch (error) {
+    console.error("Error al actualizar unreadCount:", error);
+  }
+};
+
+export const verificarSiEsPyme = async (userUID: string) => {
+  try {
+    // Consulta a la colección de usuarios una vez
+    const querySnapshot = await getDocs(collection(ikam, "users"));
+
+    // Busca coincidencia con el ID del documento
+    const matchingDoc = querySnapshot.docs.find((doc) => doc.id === userUID);
+
+    if (matchingDoc) {
+      // Verifica si hay un documento coincidente
+      const userData = matchingDoc.data(); // Obtiene los datos del documento
+
+      if (userData.pyme) {
+        // Si es una pyme, devuelve el ID de la pyme asignada
+        return userData.pyme; // Asegúrate de que este campo existe en tu modelo de usuario
+      } else {
+        return false; // No es una pyme
+      }
+    } else {
+      console.log("No se encontró un documento del usuario.");
+      return false;
+    }
+  } catch (error) {
+    console.error("Error al verificar si es pyme:", error);
+    return false; // Retorna `false` si hay un error
   }
 };

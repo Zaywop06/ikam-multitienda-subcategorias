@@ -16,7 +16,9 @@ import {
   enviarMensaje,
   suscribirseAlChat,
   getReceptorToken,
+  actualizarUnreadCount,
 } from "@/services/services";
+import { auth } from "@/firebase/config-ikam";
 
 type Mensaje = {
   user: string;
@@ -76,7 +78,7 @@ const chatNuevo = () => {
   const [mensaje, setMensaje] = useState("");
 
   // Asegúrate de que esta propiedad exista
-  const receiverUid = Array.isArray(item.idPyme) ? item.idPyme[0] : item.idPyme;
+  const user = auth.currentUser; // Obtener usuario autenticado
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -106,19 +108,28 @@ const chatNuevo = () => {
 
   // Obtener el token del receptor
   useEffect(() => {
+    // Evita volver a ejecutar si ya tienes el token del receptor
+    if (receiverToken) return;
+
     const fetchReceiverToken = async () => {
       try {
-        const token = await getReceptorToken(receiverUid); // Asume que esta función recupera el token del receptor
-        setReceiverToken(token);
+        // Determina el receptor en función de si el usuario actual es el cliente o la pyme
+        const receptorId =
+          item.idUser === user?.uid ? item.idPyme : item.idUser;
+        if (receptorId) {
+          const token = await getReceptorToken(receptorId);
+          setReceiverToken(token);
+        }
       } catch (error) {
-        console.error("Error fetching receiver token:", error);
+        console.error("Error al obtener el token del receptor:", error);
       }
     };
 
-    if (receiverUid) {
+    // Solo ejecuta si `user` está definido
+    if (user) {
       fetchReceiverToken();
     }
-  }, [receiverUid]);
+  }, [user]); // Ejecutar solo cuando `user` cambie y evitar ciclos infinitos
 
   // Enviar mensaje y notificación push
   const enviarMesaje = async () => {
@@ -127,13 +138,11 @@ const chatNuevo = () => {
     const chatId = item.id;
 
     if (userData?.uid) {
+      // Primero, actualiza el contador de mensajes no leídos
+      await actualizarUnreadCount(chatId, 1); // Cambiar de 0 a 1 para incrementar
+
       // Enviar mensaje al chat
-      await enviarMensaje(
-        chatId.toString(),
-        mensaje,
-        userData.uid,
-        receiverUid
-      );
+      await enviarMensaje(chatId.toString(), mensaje, userData.uid);
 
       if (receiverToken) {
         // Preparar notificación
